@@ -9,16 +9,27 @@
 #include <assert.h>
 #include <err.h>
 
+/* Turn on an option */
 #define SET_OPTION(opt) \
 	do { \
 		options |= 1 << (opt - 1); \
 	}while(0)
 
+/* Check if an option is set */
 #define IS_OPT_SET(opt) (options & 1 << (opt - 1))
 
+/* Options */
 enum {
 	all = 1,
 };
+
+static void 		prettyprint_strvec(char *const [], int);
+static inline int 	no_hidden(const struct dirent *)
+			    __attribute__ ((always_inline));
+static int 		list_dir(const char *);
+static int 		get_dir_vec(char *const [], int, char ***);
+inline static void 	list_dirs(char *const [], int);
+static void 		free_dirvec(char *const [], int);
 
 static unsigned options = 0U;
 static char *prognam = NULL;
@@ -27,7 +38,7 @@ static char *prognam = NULL;
  * Print a string vector in python style. Used only for debugging
  * purposes.
  */
-void
+static void
 prettyprint_strvec(char *const strvec[], int vecsiz){
 	int i;
 
@@ -54,7 +65,7 @@ no_hidden(const struct dirent *ent){
  * @return 	Number of directory entries in success, in error -1 is
  * 		returned and a warning is printed.
  */
-int
+static int
 list_dir(const char *dirpath){
 	int dirnum, i;
 	int (*filter)(const struct dirent *);
@@ -69,13 +80,15 @@ list_dir(const char *dirpath){
 	namelist = NULL;
 	dirnum = scandir(dirpath, &namelist, filter, alphasort);
 
-	if (dirnum == -1){
+	if (dirnum == -1)
 		warn("warning: cannot scan directory %s", dirpath);
-		return -1;
+
+	for (i = 0; i < dirnum; i++){
+		printf("%s\n", namelist[i]->d_name);
+		free(namelist[i]);
 	}
 
-	for (i = 0; i < dirnum; i++)
-		printf("%s\n", namelist[i]->d_name);
+	free(namelist);
 
 	return dirnum;
 }
@@ -94,8 +107,8 @@ list_dir(const char *dirpath){
  *  			and should be freed by the caller.
  * @return 		Number of directory names stored.
  */
-int
-get_dir_vec(char **argv, int argc, char ***dir_vec){
+static int
+get_dir_vec(char *const argv[], int argc, char ***dir_vec){
 	char **dv;
 	int i, dirnum;
 
@@ -123,7 +136,7 @@ get_dir_vec(char **argv, int argc, char ***dir_vec){
 /**
  * Lists all directories in dirv.
  */
-__attribute__ ((flatten)) static void
+inline static void
 list_dirs(char *const dirv[], int dirnum){
 	int i;
 
@@ -139,6 +152,14 @@ usage(FILE *stream){
 			prognam);
 }
 
+static void
+free_dirvec(char *const dirvec[], int dirnum){
+	int i;
+	for (i = 0; i < dirnum; i++)
+		free(dirvec[i]);
+	free((void*)dirvec);
+}
+
 /**
  * Directory listing. Similar to ls(1).
  *
@@ -148,9 +169,9 @@ usage(FILE *stream){
 int
 main(int argc, char *argv[]){
 	static const struct option opts[] = {
-		{"all", 0, NULL, 'a'},
+		{"all",  0, NULL, 'a'},
 		{"help", 0, NULL, 'h'},
-		{NULL, 0, NULL, 0},
+		{NULL,   0, NULL,  0},
 	};
 	char **dir_vec;
 	int dirnum;
@@ -176,6 +197,7 @@ main(int argc, char *argv[]){
 	}
 
 	list_dirs(dir_vec, dirnum);
+	free_dirvec(dir_vec, dirnum);
 
 	return 0;
 }
